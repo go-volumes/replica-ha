@@ -1,0 +1,4 @@
+github.com/go-volumes/interface v0.0.0-20260616111717-46702c78cec1 h1:f4gPeFTfQyh7oLrC8YaSkOMFD372nD1cBvA0ywPnmk4=
+github.com/go-volumes/interface v0.0.0-20260616111717-46702c78cec1/go.mod h1:0tuRHjCQUq0ql3dSvq5jQQtzB1u+bhVW7Fec58AurdQ=
+github.com/go-volumes/replica v0.0.0-20260616180108-15ec3f44323a h1:4mQcWRjcwa1SH73RjsI0/WaX9KeSeRbnP/i7RpUIyLQ=
+github.com/go-volumes/replica v0.0.0-20260616180108-15ec3f44323a/go.mod h1:hiCk1KD/iu0+2szA+LZaMwImJ4i/QDqtjZldJN8ZDSo=
