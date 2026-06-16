@@ -1,110 +1,157 @@
 # replica-ha
 
-High-availability **control plane** for [go-volumes](https://github.com/go-volumes)
-replicated block volumes. It drives a [`replica.Engine`](https://github.com/go-volumes/replica)
-(the data plane that mirrors a volume across N synchronous replicas) under
-**leader election with fence-before-promote (STONITH)**, so that **exactly one
-node is the active writer for a volume at any instant** — the safe
+[![License: BSD-3-Clause](https://img.shields.io/badge/license-BSD--3--Clause-blue)](LICENSE)
+[![Go](https://img.shields.io/badge/go-1.26.4%2B-00ADD8)](https://go.dev/dl/)
+[![CGO_ENABLED=0](https://img.shields.io/badge/CGO__ENABLED-0-success)](https://pkg.go.dev/cmd/cgo)
+
+The **high-availability control plane** for [go-volumes](https://github.com/go-volumes)
+replicated block volumes. It drives a
+[`replica.Engine`](https://github.com/go-volumes/replica) (the data plane that
+mirrors a volume across N synchronous replicas) under leader election so that
+**exactly one node is the active writer** for a volume at any instant — the safe
 single-active-writer guarantee that makes failover non-destructive.
 
-- Pure Go, `CGO_ENABLED=0`, no external runtime.
-- Dependency-free core: it imports only `go-volumes/replica` and
-  `go-volumes/interface`. The coordination store is behind an interface, so the
-  safety-critical state machine carries no etcd weight and is exhaustively unit
-  tested (100% coverage) with an in-memory fake.
+It is deliberately **vendor-neutral**: leader election and fencing are
+*interfaces you implement*, not a baked-in dependency. Bring etcd, Consul,
+ZooKeeper, or a SQL advisory lock; bring micro-VM STONITH, IPMI, or a cloud
+detach call. The safety-critical reconcile core depends only on the Go standard
+library and `go-volumes/{replica,interface}` — **no consensus store is linked
+in** — and is exhaustively unit-tested (100% coverage, 6 arches) against an
+in-memory fake.
 
-## The safety property
+## The safety property it guarantees
 
 A replicated volume is only safe if **at most one writer is live at a time**. If
-two nodes both believe they own the volume — the classic split-brain outcome of
-a network partition where a stale leader keeps writing while a new leader is
-elected on the other side — they mirror divergent writes into the same replicas
-and corrupt the volume irrecoverably.
+two nodes both believe they own the volume (split-brain — the classic outcome of
+a partition where a stale leader keeps writing while a new leader is elected on
+the other side), they mirror divergent writes into the same replicas and corrupt
+the volume irrecoverably.
 
-This package prevents that with **fence-before-promote**: a node that wins
-leadership MUST *fence the previous writer* (prove it can no longer write)
+`replica-ha` prevents this with **fence-before-promote (STONITH)**: a node that
+wins leadership MUST *fence* the previous writer — prove it can no longer write —
 **before** it activates its own engine as the writer. If the fence fails or
-times out, the node refuses to activate and stays passive. The control plane
+times out, the node **refuses to activate** and stays passive. The control plane
 never writes while a possibly-live old writer might also be writing.
 
-## Architecture
-
 ```
-   coordinator (lease-based leader election + membership; etcd in production)
-        │  Campaign / Resign / Observe / Members
-        ▼
-   ┌──────────────── Controller (per node) ────────────────┐
-   │  observe leadership →                                  │
-   │    won  → FENCE prior writer ──fail──▶ stay PASSIVE    │
-   │                          └──ok──▶ open write gate      │
-   │    lost → close write gate (demote immediately)        │
-   └───────────────────────────────────────────────────────┘
-        │ Device()
-        ▼
-   ActiveDevice  (volume.Device; WriteAt/Sync → ErrNotLeader when passive)
+   Coordinator (lease election)                          Fencer
+        │ Observe: IsSelf=true                              ▲
+        ▼                                                   │ Fence(prevWriter)
+ follower ─▶ fence-pending ──(fence OK)──▶ leader           │  MUST isolate the old
+        │      (fence FAILS → stay fence-pending,           │  writer; nil ONLY if
+        │       NEVER write — no split-brain)               │  that is truly done
+        ▼ Observe: IsSelf=false (lease lost)                │
+   demote ◀──────────────────────────────────────── ActiveDevice gate:
+                                          WriteAt/Sync → ErrNotLeader when passive
         │
         ▼
-   replica.Engine  →  replica A, replica B, … (synchronous mirror)
+   replica.Engine → replica A, replica B, …  (synchronous mirror)
 ```
 
-### `Coordinator` — the coordination seam
+## Pieces
+
+- **`Coordinator`** — the coordination seam: lease-based leader election +
+  membership. An interface, so the reconcile core is dependency-free and fully
+  testable with an in-memory fake.
+- **`Controller`** — the reconcile state machine: `RoleFollower` → `RoleFencePending`
+  (won the lease, *not yet* writing) → `RoleLeader` (fence confirmed, gate open);
+  demotes immediately on lease loss.
+- **`ActiveDevice`** — wraps the `replica.Engine` so `WriteAt`/`Sync` return
+  `ErrNotLeader` while passive (`ReadAt`/`Size` always pass through — a follower
+  may still serve reads). This is how "active writer" is enforced on the data
+  path; the engine itself has no leadership awareness.
+- **`replica.Fencer`** — the fencing seam (defined in `go-volumes/replica`).
+
+## Usage
 
 ```go
-type Coordinator interface {
-    Campaign(ctx context.Context) error
-    Resign(ctx context.Context) error
-    Observe(ctx context.Context) (<-chan Leadership, error)
-    Members(ctx context.Context) ([]string, error)
-    NodeID() string
-}
+import (
+    "github.com/go-volumes/replica"
+    replicaha "github.com/go-volumes/replica-ha"
+)
 
-type Leadership struct {
-    Leader string // node ID of the lease holder ("" = none)
-    IsSelf bool   // is the leader us? false-after-true = lease LOST
-    Term   int64  // monotonic election term (fencing token)
+eng, _ := replica.New(replicas, replica.Config{MinInSync: 2, Local: "node-a"})
+
+ctrl, dev, err := replicaha.New(eng, myCoordinator, myFencer, logger)
+if err != nil {
+    return err
 }
+// dev is the gated volume.Device the data path writes through — hand it to an
+// NBD server, a filesystem-format driver, or pool.OpenWith. It rejects writes
+// with ErrNotLeader until this node is the confirmed leader.
+go ctrl.Run(ctx)                    // campaign, fence-before-promote, demote
+defer ctrl.Stop(context.Background()) // resign + deactivate
 ```
 
-Leadership is backed by a **time-bounded lease**. If a node stops renewing it
-(process stall, partition, being fenced by a peer), the lease **expires** at the
-store and a `Leadership{IsSelf:false}` MUST surface on `Observe` so the
-`Controller` demotes and stops writing before the grace window elapses. An
-etcd-backed `Coordinator` (mirroring weft-ha-postgresql's `EtcdDCS`, with an
-embedded-etcd integration test) is the **deferred next step**; it lives outside
-this core so the state machine stays dep-free.
+## Implementing a `Coordinator`
 
-### `Controller` — the reconcile state machine
+A `Coordinator` exposes a **time-bounded lease** for one volume. The lease is the
+safety hinge: while you hold it you may (after fencing) write; the instant you
+stop renewing it — stall, partition, being fenced — it expires and you are no
+longer leader. Implement it over any store with sessions/leases and a
+compare-and-swap election: etcd `concurrency.Election`, Consul sessions,
+ZooKeeper ephemeral znodes, a Postgres advisory lock with a TTL, …
+
+| Method | Contract |
+| --- | --- |
+| `Campaign(ctx)` | Block until this node acquires and holds the lease, or `ctx` is done. Returning nil means **leadership is held now**. Re-campaigning while leader may return immediately. |
+| `Resign(ctx)` | Release the lease so a peer can win. A no-op (nil) when not leader. |
+| `Observe(ctx)` | Stream a `Leadership` on **every** change. **CRITICAL:** a lost lease (expiry/partition) MUST surface here as `IsSelf == false` so the Controller demotes *before the lease grace window elapses*. An implementation that cannot observe its own lease loss is **unsafe and unusable here**. Deliver the current state promptly so a late subscriber is not blind; close the channel when `ctx` is done or the session dies. |
+| `Members(ctx)` | The node IDs holding a live membership lease — fenced/partitioned nodes drop out automatically as their lease expires. |
+| `NodeID()` | This node's stable identity (matches `Leadership.Leader` when leader; the id a peer passes to `Fence`). |
+
+`Leadership.Term` must be **monotonically non-decreasing**, strictly greater on
+every leader change — an epoch / fencing token. All methods must be
+concurrency-safe and honour `ctx`.
+
+## Implementing a `Fencer`
 
 ```go
-ctrl, dev, err := replicaha.New(engine, coord, fencer, logger)
-go ctrl.Run(ctx)          // campaign, fence-before-promote, gate writes
-// ... the data path (a filesystem-format driver, an NBD server) writes through dev
-defer ctrl.Stop(ctx)      // resign + deactivate
+type Fencer interface { Fence(ctx context.Context, writer string) error }
 ```
 
-Roles: `RoleFollower` (gate closed) → `RoleFencePending` (won the lease, **not
-yet** writing — fencing the prior writer) → `RoleLeader` (fence confirmed, gate
-open). A failed fence stays `RoleFencePending` and never opens the gate.
+`Fence` must **isolate the named writer so it can no longer issue a single write
+to the shared replicas**, and **return nil only once that is definitively true**.
+The Controller opens the write gate the moment `Fence` returns nil — so a
+`Fencer` that returns nil *without* actually stopping the old writer silently
+re-introduces split-brain. When in doubt, return an error: a failed fence keeps
+the new leader passive (safe); a falsely-successful one corrupts data.
 
-### Active/passive write gating
+Back it with whatever your substrate offers, strongest first:
 
-`replica.Engine` has no leadership notion, so the gate lives in front of it.
-`ActiveDevice` wraps the engine and satisfies `volume.Device`:
+- **Power / STONITH** — hard-stop the old writer's machine or micro-VM (this is
+  what weft does, via its agent: `StopVM`, then poll until confirmed-stopped). A
+  stopped node cannot write — the gold standard.
+- **Cloud control plane** — force-detach the volume / power off the instance via
+  the provider API.
+- **Fabric isolation** — an IPMI/PDU power cut, or a network ACL that severs the
+  old writer from the replicas.
+- **Lease / credential revocation** — revoke the token the old writer presents to
+  the replicas (only safe if the replicas actually enforce it on every write).
 
-- **passive** (default, and after losing leadership): `WriteAt` / `Sync` return
-  `ErrNotLeader` without touching any replica; `ReadAt` / `Size` still pass
-  through (a follower may serve reads).
-- **active** (only after a confirmed fence): everything passes straight to the
-  engine.
+`Fence` should be **idempotent** (fencing an already-dead node returns nil) and
+honour `ctx` (a timeout → return an error → the new leader stays passive and
+retries on the next observation).
 
-The data path needs no awareness of leadership beyond handling `ErrNotLeader`.
+## Known limitation (honest)
+
+If a node loses its lease *during* a slow `Fence` and then activates, there is a
+brief window before it processes the demotion. That window is closed by **STONITH
+itself** (the new leader hard-stops this node) and, ultimately, by threading a
+**fencing token** (the lease `Term`) onto every replica write so a stale writer's
+writes are rejected at the replica — the `activate(token)` hook is reserved for
+exactly this. This is the standard state of the art (Longhorn and Patroni rely on
+the same fencing model); `replica-ha` is explicit that watertightness depends on
+the `Fencer` being real.
 
 ## Status
 
-Core control plane complete: `Coordinator` seam, `Controller` state machine,
-`ActiveDevice` gate, 100% test coverage on all 6 supported 64-bit
-architectures. The etcd-backed `Coordinator` is the deferred follow-up.
+Core control plane complete — `Coordinator` seam, `Controller` state machine,
+`ActiveDevice` gate — 100% test coverage on all 6 supported 64-bit
+architectures. An etcd-backed `Coordinator` (mirroring weft-ha-postgresql's
+`EtcdDCS`, with an embedded-etcd integration test) and weft's STONITH `Fencer`
+are integrator-side follow-ups that plug into these seams.
 
 ## License
 
-BSD-3-Clause — see [LICENSE](LICENSE). Copyright the go-volumes/replica-ha authors.
+BSD-3-Clause © the go-volumes/replica-ha authors.
