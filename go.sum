@@ -10,3 +10,5 @@ github.com/go-volumes/replica v0.0.0-20260830080213-f9add04a2a29 h1:gY08d5Fdxqr2
 github.com/go-volumes/replica v0.0.0-20260830080213-f9add04a2a29/go.mod h1:hiCk1KD/iu0+2szA+LZaMwImJ4i/QDqtjZldJN8ZDSo=
 github.com/go-volumes/replica v0.0.0-20260831132412-154caa5e2516 h1:9M3dv+hrMhAG1oEbnGqwKFClMNdznPBh4jeej5cn6bI=
 github.com/go-volumes/replica v0.0.0-20260831132412-154caa5e2516/go.mod h1:mQAr2LWcp1pcfSg0LMX2Ag73VRe70k74C439RNqTsTE=
+github.com/go-volumes/replica v0.0.0-20260901145334-2d5385303d86 h1:IbjbouXZlxsfTwecQ8iJj92YMsg65O8m9P0tBH/bcI0=
+github.com/go-volumes/replica v0.0.0-20260901145334-2d5385303d86/go.mod h1:2t/9dySPs+FpS3XkV0P/YI+LDWw0m7E//hNHSSwdRG4=
