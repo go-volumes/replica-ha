@@ -1,14 +1,4 @@
-github.com/go-volumes/interface v0.0.0-20260616111717-46702c78cec1 h1:f4gPeFTfQyh7oLrC8YaSkOMFD372nD1cBvA0ywPnmk4=
-github.com/go-volumes/interface v0.0.0-20260616111717-46702c78cec1/go.mod h1:0tuRHjCQUq0ql3dSvq5jQQtzB1u+bhVW7Fec58AurdQ=
-github.com/go-volumes/interface v0.0.0-20260830080208-a74e656069f0 h1:57M/59/1s26AIH9mWL8thQcEy3f6lDMvv9/p/3zMY9E=
-github.com/go-volumes/interface v0.0.0-20260830080208-a74e656069f0/go.mod h1:0tuRHjCQUq0ql3dSvq5jQQtzB1u+bhVW7Fec58AurdQ=
 github.com/go-volumes/interface v0.0.0-20260831115414-8aa56d750f28 h1:7wmYFFfyzgLWLITE6BV5CJZWheMta5ydP5rrEUgVzjY=
 github.com/go-volumes/interface v0.0.0-20260831115414-8aa56d750f28/go.mod h1:0tuRHjCQUq0ql3dSvq5jQQtzB1u+bhVW7Fec58AurdQ=
-github.com/go-volumes/replica v0.0.0-20260616180108-15ec3f44323a h1:4mQcWRjcwa1SH73RjsI0/WaX9KeSeRbnP/i7RpUIyLQ=
-github.com/go-volumes/replica v0.0.0-20260616180108-15ec3f44323a/go.mod h1:hiCk1KD/iu0+2szA+LZaMwImJ4i/QDqtjZldJN8ZDSo=
-github.com/go-volumes/replica v0.0.0-20260830080213-f9add04a2a29 h1:gY08d5Fdxqr2YeVtBAGlz+LpwjU6pAeAjQhpyhOTWKU=
-github.com/go-volumes/replica v0.0.0-20260830080213-f9add04a2a29/go.mod h1:hiCk1KD/iu0+2szA+LZaMwImJ4i/QDqtjZldJN8ZDSo=
-github.com/go-volumes/replica v0.0.0-20260831132412-154caa5e2516 h1:9M3dv+hrMhAG1oEbnGqwKFClMNdznPBh4jeej5cn6bI=
-github.com/go-volumes/replica v0.0.0-20260831132412-154caa5e2516/go.mod h1:mQAr2LWcp1pcfSg0LMX2Ag73VRe70k74C439RNqTsTE=
 github.com/go-volumes/replica v0.0.0-20260901145334-2d5385303d86 h1:IbjbouXZlxsfTwecQ8iJj92YMsg65O8m9P0tBH/bcI0=
 github.com/go-volumes/replica v0.0.0-20260901145334-2d5385303d86/go.mod h1:2t/9dySPs+FpS3XkV0P/YI+LDWw0m7E//hNHSSwdRG4=
