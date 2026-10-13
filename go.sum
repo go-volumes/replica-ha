@@ -1,4 +1,4 @@
-github.com/go-volumes/interface v0.0.0-20261005012011-927a08191bcf h1:zDR04uoHyEEMb9Z2sQTAKyzqPfKLrP1DiLF9/7CVIV0=
-github.com/go-volumes/interface v0.0.0-20261005012011-927a08191bcf/go.mod h1:lwltlACDHlD2o8lLqrCKTU4AeSGJYxu5jQiyeYUSnG0=
-github.com/go-volumes/replica v0.0.0-20261006065554-75acd330f7c4 h1:Tkbiri1YDO29B/KA610yRbBu1k+RJ0X40gxXrDbK7bI=
-github.com/go-volumes/replica v0.0.0-20261006065554-75acd330f7c4/go.mod h1:oKUaaPGMWIqu3H8LDT0W8UgkTT20iP+vj5G/Kw+poLY=
+github.com/go-volumes/interface v0.0.0-20261011024118-390554f5bb32 h1:u2vxLnkai8VCEJn+ja4bpxWiLM4yygnHdwOUjaiI4AY=
+github.com/go-volumes/interface v0.0.0-20261011024118-390554f5bb32/go.mod h1:lwltlACDHlD2o8lLqrCKTU4AeSGJYxu5jQiyeYUSnG0=
+github.com/go-volumes/replica v0.0.0-20261012063820-d53a2d09995e h1:Xn86Da16VAvz+jN5QLBVBEFB350J0tRuw5JsV+e+MOY=
+github.com/go-volumes/replica v0.0.0-20261012063820-d53a2d09995e/go.mod h1:+XnMaYSIAxjGFScsZm5GxYDlfbOEdcGRNv6bEBDDnaI=
